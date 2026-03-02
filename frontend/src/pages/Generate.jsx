@@ -4,27 +4,22 @@ import Layout from '../components/Layout';
 import { generationAPI, personaAPI } from '../services/api';
 
 export default function Generate() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [type, setType] = useState(searchParams.get('type') || 'image');
   const [prompt, setPrompt] = useState('');
-  const [model, setModel] = useState(type === 'image' ? 'dall-e-3' : 'gpt-4');
+  const [model, setModel] = useState(
+    type === 'image' ? 'dall-e-3' : 'gpt-4'
+  );
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [persona, setPersona] = useState(null);
   const [usageStats, setUsageStats] = useState({ used: 0, limit: 10 });
+  const [useFaceConsistency, setUseFaceConsistency] = useState(false);
 
   useEffect(() => {
     loadPersona();
   }, []);
-
-  useEffect(() => {
-    const typeParam = searchParams.get('type');
-    if (typeParam === 'image' || typeParam === 'text') {
-      setType(typeParam);
-      setModel(typeParam === 'image' ? 'dall-e-3' : 'gpt-4');
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     loadUsageStats();
@@ -56,21 +51,11 @@ export default function Generate() {
       const limit = type === 'image' ? 10 : 50;
       setUsageStats({ used: todayGenerations.length, limit });
     } catch (err) {
-      console.error('Failed to load usage stats:', err);
+      console.error(err);
     }
   };
 
-  const handleTypeChange = (newType) => {
-    setType(newType);
-    setSearchParams({ type: newType });
-    setModel(newType === 'image' ? 'dall-e-3' : 'gpt-4');
-    setResult(null);
-    setError('');
-  };
-
-  const handleGenerate = async (e) => {
-    e.preventDefault();
-
+  const handleGenerate = async () => {
     if (!prompt.trim()) {
       setError('Please enter a prompt');
       return;
@@ -84,28 +69,33 @@ export default function Generate() {
       let response;
 
       if (type === 'image') {
-        response = await generationAPI.generateImage({ prompt, model });
+        response = await generationAPI.generateImage({
+          prompt,
+          model: useFaceConsistency ? 'fal-face-to-many' : model,
+          useFaceConsistency,
+        });
+
         setResult({
           type: 'image',
           url: response.data.imageUrl,
-          generation: response.data.generation,
         });
       } else {
-        response = await generationAPI.generateText({ prompt, model });
+        response = await generationAPI.generateText({
+          prompt,
+          model,
+        });
+
         setResult({
           type: 'text',
           text: response.data.text,
-          generation: response.data.generation,
         });
       }
 
       loadUsageStats();
     } catch (err) {
-      console.error('Generation error:', err);
       setError(
         err.response?.data?.error ||
-        err.response?.data?.message ||
-        'Generation failed. Please try again.'
+          'Generation failed. Please try again.'
       );
     } finally {
       setGenerating(false);
@@ -136,13 +126,52 @@ export default function Generate() {
         {!persona && (
           <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 mb-6">
             <p className="text-yellow-500 text-sm">
-              ⚠️ You haven't created a persona yet. Generated content won't be personalized.{' '}
-              <a href="/persona" className="underline font-semibold">
-                Create one now
-              </a>
+              ⚠️ You haven't created a persona yet. Generated content won't be personalized.
             </p>
           </div>
         )}
+
+        {/* TYPE TOGGLE */}
+        <div className="flex gap-4 mb-8">
+          <button
+            onClick={() => {
+              setType('image');
+              setModel('dall-e-3');
+              setResult(null);
+              setUseFaceConsistency(false);
+            }}
+            disabled={generating}
+            className={`flex-1 p-6 rounded-xl border-2 transition text-left ${
+              type === 'image'
+                ? 'border-white bg-white/5'
+                : 'border-gray-700 bg-black/20 hover:border-gray-600'
+            }`}
+          >
+            <span className="text-3xl">🎨</span>
+            <h3 className="text-xl font-semibold text-white mt-2">
+              Image Generation
+            </h3>
+          </button>
+
+          <button
+            onClick={() => {
+              setType('text');
+              setModel('gpt-4');
+              setResult(null);
+            }}
+            disabled={generating}
+            className={`flex-1 p-6 rounded-xl border-2 transition text-left ${
+              type === 'text'
+                ? 'border-white bg-white/5'
+                : 'border-gray-700 bg-black/20 hover:border-gray-600'
+            }`}
+          >
+            <span className="text-3xl">✍️</span>
+            <h3 className="text-xl font-semibold text-white mt-2">
+              Text Generation
+            </h3>
+          </button>
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
 
@@ -151,10 +180,6 @@ export default function Generate() {
 
             {/* Prompt */}
             <div className="bg-dark-card rounded-xl p-6 border border-gray-800">
-              <label className="text-white font-medium mb-3 block">
-                ✏️ Your Prompt
-              </label>
-
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -165,81 +190,35 @@ export default function Generate() {
                     ? 'Describe what you want to create...'
                     : 'e.g., Write a LinkedIn post about AI innovation'
                 }
-                className="w-full px-4 py-3 bg-black/40 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink outline-none transition resize-none"
+                className="w-full px-4 py-3 bg-black/40 border border-gray-700 rounded-lg text-white"
               />
             </div>
 
             {/* Preview */}
             <div className="bg-dark-card rounded-xl p-6 border border-gray-800">
-              <h3 className="text-white font-semibold mb-4">Preview</h3>
-
               {result ? (
-                <>
-                  {result.type === 'image' ? (
-                    <>
-                      <img
-                        src={result.url}
-                        alt="Generated"
-                        className="w-full rounded-lg mb-4"
-                      />
-
-                      <div className="space-y-2">
-                        <a
-                          href={result.url}
-                          download
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block w-full bg-white text-black py-3 rounded-lg font-semibold hover:bg-gray-200 transition text-center"
-                        >
-                          Download Image
-                        </a>
-
-                        <a
-                          href={result.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block w-full bg-white/10 hover:bg-white/20 text-white py-3 rounded-lg font-semibold transition text-center"
-                        >
-                          Open Full Size
-                        </a>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="bg-black/40 rounded-lg p-6 mb-4 max-h-96 overflow-y-auto">
-                        <p className="text-gray-300 text-sm whitespace-pre-wrap">
-                          {result.text}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(result.text);
-                        }}
-                        className="w-full bg-white text-black py-3 rounded-lg font-semibold hover:bg-gray-200 transition"
-                      >
-                        📋 Copy to Clipboard
-                      </button>
-                    </>
-                  )}
-                </>
+                result.type === 'image' ? (
+                  <>
+                    <img
+                      src={result.url}
+                      alt="Generated"
+                      className="w-full rounded-lg mb-4"
+                    />
+                  </>
+                ) : (
+                  <div className="bg-black/40 rounded-lg p-6">
+                    <p className="text-gray-300 whitespace-pre-wrap">
+                      {result.text}
+                    </p>
+                  </div>
+                )
               ) : (
-                <div className="aspect-video bg-black/40 rounded-lg flex items-center justify-center border border-gray-700">
-                  <p className="text-gray-500 text-sm">
+                <div className="aspect-video bg-black/40 rounded-lg flex items-center justify-center">
+                  <p className="text-gray-500">
                     Your generated content will appear here.
                   </p>
                 </div>
               )}
-
-              {/* Usage */}
-              <div className="mt-6 pt-6 border-t border-gray-700">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Today's Usage</span>
-                  <span className="text-white font-semibold">
-                    {usageStats.used}/{usageStats.limit}
-                  </span>
-                </div>
-              </div>
             </div>
 
             {/* Generate Button */}
@@ -247,7 +226,7 @@ export default function Generate() {
               <button
                 onClick={handleGenerate}
                 disabled={generating || !prompt.trim()}
-                className="flex-1 bg-white text-black py-4 rounded-xl font-semibold hover:bg-gray-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-white text-black py-4 rounded-xl font-semibold"
               >
                 {generating ? 'Generating...' : 'Generate with AI'}
               </button>
@@ -255,7 +234,7 @@ export default function Generate() {
               {result && (
                 <button
                   onClick={handleReset}
-                  className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white rounded-xl font-semibold transition"
+                  className="px-8 py-4 bg-white/10 text-white rounded-xl"
                 >
                   New Generation
                 </button>
@@ -267,64 +246,69 @@ export default function Generate() {
                 {error}
               </div>
             )}
-
           </div>
 
           {/* RIGHT COLUMN */}
           <div className="space-y-6">
 
-            {/* Model Selector */}
             <div className="bg-dark-card rounded-xl p-6 border border-gray-800">
-              <label className="text-white font-medium mb-4 block">
+              <h3 className="text-white font-medium mb-4">
                 ✨ AI Model
-              </label>
+              </h3>
 
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                disabled={generating}
-                className="w-full px-4 py-3 bg-black/40 border border-gray-700 rounded-lg text-white"
-              >
-                {type === 'image' ? (
-                  <>
-                    <option value="dall-e-3">DALL-E 3</option>
-                    <option value="dall-e-2">DALL-E 2</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="gpt-4">GPT-4</option>
-                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                    <option value="gpt-4o">GPT-4o</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            {/* Tips */}
-            {!result && !generating && (
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6">
-                <h3 className="font-semibold text-blue-400 mb-3">
-                  💡 Tips for better results
-                </h3>
-
-                <ul className="space-y-2 text-sm text-blue-300">
-                  {type === 'image' ? (
-                    <>
-                      <li>• Be specific about style and lighting</li>
-                      <li>• Include composition details</li>
-                      <li>• Mention art style references</li>
-                    </>
+              {type === 'image' ? (
+                <>
+                  {!useFaceConsistency ? (
+                    <select
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      disabled={generating}
+                      className="w-full px-4 py-3 bg-black/40 border border-gray-700 rounded-lg text-white mb-4"
+                    >
+                      <option value="dall-e-3">DALL-E 3</option>
+                      <option value="dall-e-2">DALL-E 2</option>
+                    </select>
                   ) : (
-                    <>
-                      <li>• Specify format (tweet, blog, email)</li>
-                      <li>• Mention tone and length</li>
-                      <li>• Include key talking points</li>
-                    </>
+                    <div className="bg-brand-pink/10 border border-brand-pink/30 rounded-lg p-4 mb-4">
+                      <p className="text-brand-pink text-sm">
+                        Using Fal.ai Face-to-Many
+                      </p>
+                    </div>
                   )}
-                </ul>
-              </div>
-            )}
+
+                  {/* Face Consistency */}
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-white font-medium">
+                        Use My Face
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={useFaceConsistency}
+                        onChange={(e) =>
+                          setUseFaceConsistency(e.target.checked)
+                        }
+                        disabled={generating}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  disabled={generating}
+                  className="w-full px-4 py-3 bg-black/40 border border-gray-700 rounded-lg text-white"
+                >
+                  <option value="gpt-4">GPT-4</option>
+                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                  <option value="gpt-3.5-turbo">
+                    GPT-3.5 Turbo
+                  </option>
+                  <option value="gpt-4o">GPT-4o</option>
+                </select>
+              )}
+            </div>
 
           </div>
         </div>
