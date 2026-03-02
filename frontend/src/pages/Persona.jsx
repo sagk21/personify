@@ -21,6 +21,14 @@ export default function Persona() {
     loadPersona();
   }, []);
 
+  // Helper to get backend URL
+const getBackendUrl = () => {
+  if (window.location.hostname === 'localhost') {
+    return 'http://localhost:5000';
+  }
+  return 'https://personify-backend-k04y.onrender.com';
+};
+
   const loadPersona = async () => {
     try {
       const response = await personaAPI.get();
@@ -196,7 +204,7 @@ export default function Persona() {
             {images.map((image) => (
               <div key={image.id} className="relative group aspect-square">
                 <img
-                  src={`http://localhost:5000${image.imageUrl}`}
+                  src={`${getBackendUrl()}${image.imageUrl}`}
                   alt="Persona"
                   className="w-full h-full object-cover rounded-xl border border-gray-700"
                 />
