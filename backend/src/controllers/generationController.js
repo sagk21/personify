@@ -80,7 +80,7 @@ async function generateImage(req, res) {
           if (faceModel === 'nano-banana-2') {
             result = await fal.subscribe('fal-ai/nano-banana-2/edit', {
               input: {
-                image_url: [imageUrlPath],
+                image_urls: [imageUrlPath],
                 prompt: enhancedPrompt,
                 image_size: 'square_hd',
                 num_inference_steps: 28,
@@ -98,7 +98,7 @@ async function generateImage(req, res) {
               'fal-ai/bytedance/seedream/v4.5/edit',
               {
                 input: {
-                  image_url: [imageUrlPath],
+                  image_urls: [imageUrlPath],
                   prompt: enhancedPrompt,
                   num_inference_steps: 25,
                   guidance_scale: 7.5,
